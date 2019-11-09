@@ -1,7 +1,7 @@
 /*
  *
  *  Author: Srinath S
- *  Rference: Code from Dr. Sam Seiwert
+ *
  */
 
 /************
@@ -38,7 +38,7 @@ using namespace std;
 
 #define NUM_THREADS (3+1)
 #define NUM_CPU_CORES (1)
-//#define FRAME_COUNT (200)
+
 #define TRUE (1)
 #define FALSE (0)
 #define USEC_PER_MSEC (1000)
@@ -51,10 +51,12 @@ using namespace std;
 //#define HZ
 struct utsname unameData;
 
-int socket_enable=0;
 static int hz_enable =0;
 int FRAME_COUNT=0;
+
 /*socket_parameters*/
+
+int socket_enable=0;
 int length = 0;
 int server_socket =0;
 int portno = 0;
@@ -90,8 +92,6 @@ vector<Vec4i> lines;
 Mat gray;
 static int frame_count = 51;
 
-
-/*New Set of variables*/
 
 int abortTest=FALSE;
 int abortS1=FALSE, abortS2=FALSE, abortS3=FALSE, abortS4=FALSE, abortS5=FALSE, abortS6=FALSE, abortS7=FALSE;
@@ -229,6 +229,7 @@ Mat remove_frame()
 }
 
 
+/* Service 1 is a real time thread that captures the image from camera and stores in circular buffer*/
 
 void *Service_1(void *threadp)
 {
@@ -242,11 +243,6 @@ void *Service_1(void *threadp)
     threadParams_t *threadParams = (threadParams_t *)threadp;
     
     double diff1[FRAME_COUNT];
-    
-   
-    //gettimeofday(&current_time_val, (struct timezone *)0);
-    //syslog(LOG_CRIT, "Frame_Capture @ sec=%d, msec=%d\n", (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
-   //printf("Frame_Capture @ sec=%d, msec=%d\n", (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
  
     capture = (CvCapture *)cvCreateCameraCapture(0);
     cvSetCaptureProperty(capture, CV_CAP_PROP_FRAME_WIDTH, HRES);
@@ -258,51 +254,43 @@ void *Service_1(void *threadp)
     {
         sem_wait(&semS1);
         S1Cnt++;
-	count++;
-        //gettimeofday(&current_time_val, (struct timezone *)0);
-	
-	clock_gettime(CLOCK_REALTIME, &start_frame_cap_time);
-        syslog(LOG_CRIT, "Frame_Capture1 %llu @ sec= %f \n", S1Cnt, ((double)start_frame_cap_time.tv_sec + (double) ((start_frame_cap_time.tv_nsec)/(double)1000000000)));
-	//printf( "Frame_Capture start_time %llu @ sec= %f \n", S1Cnt, ((double)start_frame_cap_time.tv_sec + (double) ((start_frame_cap_time.tv_nsec)/(double)1000000000)));
-	frame=cvQueryFrame(capture);
-	mat_frame = cvarrToMat(frame);
-	add_frame(&mat_frame);
-	//previous_time_val = current_time_val;
-	//gettimeofday(&current_time_val, (struct timezone *)0);
-	clock_gettime(CLOCK_REALTIME, &end_frame_cap_time);
-	//printf( "Frame_Capture end_time %llu @ sec= %f \n", S1Cnt, ((double)end_frame_cap_time.tv_sec + (double) ((end_frame_cap_time.tv_nsec)/(double)1000000000)));
-	if(count >5)
-	{
-				
-		diff1[i] = ((double)end_frame_cap_time.tv_sec + (double) ((end_frame_cap_time.tv_nsec)/(double)1000000000)) - ((double)start_frame_cap_time.tv_sec + (double) ((start_frame_cap_time.tv_nsec)/(double)1000000000));
-		//printf("\n The difference in Frame_Capture time is : %f \n", diff1[i]);
-		total_time_sec = total_time_sec + diff1[i];
-		i++;
+		count++;
 
-		if(count == FRAME_COUNT)
+		clock_gettime(CLOCK_REALTIME, &start_frame_cap_time);
+	    syslog(LOG_CRIT, "Frame_Capture1 %llu @ sec= %f \n", S1Cnt, ((double)start_frame_cap_time.tv_sec + (double) ((start_frame_cap_time.tv_nsec)/(double)1000000000)));
+		frame=cvQueryFrame(capture);
+		mat_frame = cvarrToMat(frame);
+		add_frame(&mat_frame);
+		clock_gettime(CLOCK_REALTIME, &end_frame_cap_time);
+
+		if(count >5)
 		{
-			for(int j=0; j < FRAME_COUNT-5; ++j)
-			    {
-				if(diff1[0] < diff1[j])
-				{
-					diff1[0] = diff1[j];
-				}
+					
+			diff1[i] = ((double)end_frame_cap_time.tv_sec + (double) ((end_frame_cap_time.tv_nsec)/(double)1000000000)) - ((double)start_frame_cap_time.tv_sec + (double) ((start_frame_cap_time.tv_nsec)/(double)1000000000));
+			//printf("\n The difference in Frame_Capture time is : %f \n", diff1[i]);
+			total_time_sec = total_time_sec + diff1[i];
+			i++;
 
-				
+			if(count == FRAME_COUNT)
+			{
+				for(int j=0; j < FRAME_COUNT-5; ++j)
+			    {
+					if(diff1[0] < diff1[j])
+					{
+						diff1[0] = diff1[j];
+					}
 			    }
-	    
-	    		printf("***Frame_Capture WCET @ sec= %f\n",diff1[0]);
-			syslog(LOG_CRIT, "***Frame_Capture WCET @ sec= %f\n",diff1[0]);
-			printf("***Frame_Capture Total_time sec= %f\n", total_time_sec);
-			average_time = ((double)total_time_sec)/(FRAME_COUNT-5);
-			printf("***Frame_Capture Average_time %f\n seconds", average_time);
-			//syslog(LOG_CRIT, "***Sequencer cycle WCET @ sec= %d, msec=%d\n",(int)difference_time_val[0].tv_sec,(int)difference_time_val[0].tv_usec/USEC_PER_MSEC);
-			//syslog(LOG_CRIT, "***Sequencer cycle Total_time sec=%d, msec=%d\n", total_time_sec, total_time_msec);
+		    
+		    	printf("***Frame_Capture WCET @ sec= %f\n",diff1[0]);
+				syslog(LOG_CRIT, "***Frame_Capture WCET @ sec= %f\n",diff1[0]);
+				printf("***Frame_Capture Total_time sec= %f\n", total_time_sec);
+				average_time = ((double)total_time_sec)/(FRAME_COUNT-5);
+				printf("***Frame_Capture Average_time %f\n seconds", average_time);
+
+			}
 
 		}
-
-	}
-	sem_post(&semS2);	
+		sem_post(&semS2);	
     }
     
     cvReleaseCapture(&capture);
@@ -311,10 +299,10 @@ void *Service_1(void *threadp)
 }
 
 
+/* Service 2 is a best effort thread that dumps the image from circular buffer*/
 void *Service_2(void *threadp)
 {
-	//FILE *f = fopen(test.csv, "w"); 
-	//if (f == NULL) return -1; 
+
 	Mat frame_dump;
 	struct timeval current_time_val, previous_time_val, difference_time_val[FRAME_COUNT], total_time;
 	double current_time;
@@ -328,83 +316,70 @@ void *Service_2(void *threadp)
 
 	int count = 0;
 	int i = 0;
-	//printf("\n Entered Service_2 \n");
-	//gettimeofday(&current_time_val, (struct timezone *)0);
-	//syslog(LOG_CRIT, "Frame_Dump @ sec=%d, msec=%d\n", (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
-	//printf("Frame_Dump @ sec=%d, msec=%d\n", (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
+
 
 	while(!abortS2)
 	{
 		sem_wait(&semS2);
 		S2Cnt++;
 		count++;
-		//printf("\n Entered Service_2 \n");
-		//gettimeofday(&current_time_val, (struct timezone *)0);
+
 		if(count < FRAME_COUNT)
 		{
-		clock_gettime(CLOCK_REALTIME, &start_frame_dump_time);
-		syslog(LOG_CRIT, "Frame_Dump %llu @ sec= %f \n", S2Cnt, ((double)start_frame_dump_time.tv_sec + (double) ((start_frame_dump_time.tv_nsec)/(double)1000000000)));
-		//printf( "Frame_Capture start_time %llu @ sec= %f \n", S2Cnt, ((double)start_frame_dump_time.tv_sec + (double) ((start_frame_dump_time.tv_nsec)/(double)1000000000)));
-		//sprintf(ppm,"img%d_%fsec.ppm",count, ((double)end_frame_cap_time.tv_sec + (double) ((end_frame_cap_time.tv_nsec)/(double)1000000000)));
-		//syslog(LOG_CRIT, "Frame_Dump %llu @ sec=%d, msec=%d\n", S2Cnt, (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
-		sprintf(ppm,"img%d.ppm",count);
-		frame_dump = remove_frame();
-		/*		
-		if(queue.seq_number != S2Cnt)
-		{
-			queue.Outi--;	
-			goto R;
-		}*/
-		uname(&unameData);
-		sprintf(image_header,"%s,%f ",unameData.nodename,((double)end_frame_cap_time.tv_sec + (double) ((end_frame_cap_time.tv_nsec)/(double)1000000000)));
-		putText(frame_dump, image_header, Point(5,100), FONT_HERSHEY_PLAIN, 1, Scalar(255,0,0), 2);
-		//imshow("frame_dump",frame_dump);
-		
-		imwrite(ppm,frame_dump);
+			clock_gettime(CLOCK_REALTIME, &start_frame_dump_time);
+			syslog(LOG_CRIT, "Frame_Dump %llu @ sec= %f \n", S2Cnt, ((double)start_frame_dump_time.tv_sec + (double) ((start_frame_dump_time.tv_nsec)/(double)1000000000)));
+			
+			sprintf(ppm,"img%d.ppm",count);
+			frame_dump = remove_frame();
 
-		clock_gettime(CLOCK_REALTIME, &end_frame_dump_time);
-		//printf( "Frame_Capture end_time %llu @ sec= %f \n", S2Cnt, ((double)end_frame_dump_time.tv_sec + (double) ((end_frame_dump_time.tv_nsec)/(double)1000000000)));
+			uname(&unameData);
+			sprintf(image_header,"%s,%f ",unameData.nodename,((double)end_frame_cap_time.tv_sec + (double) ((end_frame_cap_time.tv_nsec)/(double)1000000000)));
+			putText(frame_dump, image_header, Point(5,100), FONT_HERSHEY_PLAIN, 1, Scalar(255,0,0), 2);
+			
+			imwrite(ppm,frame_dump);
 
-		if(count >5)
-		{			
-			diff1[i] = ((double)end_frame_dump_time.tv_sec + (double) ((end_frame_dump_time.tv_nsec)/(double)1000000000)) - ((double)start_frame_dump_time.tv_sec + (double) ((start_frame_dump_time.tv_nsec)/(double)1000000000));
-			//printf("\n The difference in Frame_Capture time is : %f \n", diff1[i]);
-			total_time_sec = total_time_sec + diff1[i];
-			i++;
+			clock_gettime(CLOCK_REALTIME, &end_frame_dump_time);
 
-			if(count == FRAME_COUNT)
-			{
-				for(int j=0; j < FRAME_COUNT-5; ++j)
-			    	{
-					if(diff1[0] < diff1[j])
-					{
-						diff1[0] = diff1[j];
+			if(count >5)
+			{			
+				diff1[i] = ((double)end_frame_dump_time.tv_sec + (double) ((end_frame_dump_time.tv_nsec)/(double)1000000000)) - ((double)start_frame_dump_time.tv_sec + (double) ((start_frame_dump_time.tv_nsec)/(double)1000000000));
+				total_time_sec = total_time_sec + diff1[i];
+				i++;
+
+				if(count == FRAME_COUNT)
+				{
+					for(int j=0; j < FRAME_COUNT-5; ++j)
+				    	{
+						if(diff1[0] < diff1[j])
+						{
+							diff1[0] = diff1[j];
+						}
+
+						
 					}
+			    
+			    	printf("***Frame_Dump WCET @ sec= %f\n",diff1[0]);
+					syslog(LOG_CRIT, "***Frame_Dump WCET @ sec= %f\n",diff1[0]);
+					printf("***Frame_Dump Total_time sec= %f\n", total_time_sec);
+					average_time = ((double)total_time_sec)/(FRAME_COUNT-5);
+					printf("***Frame_Dump Average_time %f\n seconds", average_time);
 
-					
 				}
-		    
-		    		printf("***Frame_Dump WCET @ sec= %f\n",diff1[0]);
-				syslog(LOG_CRIT, "***Frame_Dump WCET @ sec= %f\n",diff1[0]);
-				printf("***Frame_Dump Total_time sec= %f\n", total_time_sec);
-				average_time = ((double)total_time_sec)/(FRAME_COUNT-5);
-				printf("***Frame_Dump Average_time %f\n seconds", average_time);
-				//syslog(LOG_CRIT, "***Sequencer cycle WCET @ sec= %d, msec=%d\n",(int)difference_time_val[0].tv_sec,(int)difference_time_val[0].tv_usec/USEC_PER_MSEC);
-				//syslog(LOG_CRIT, "***Sequencer cycle Total_time sec=%d, msec=%d\n", total_time_sec, total_time_msec);
 
 			}
-
 		}
-		}
-	if(socket_enable == 1)
-	{
-		sem_post(&semS3);
-	}	
+		if(socket_enable == 1)
+		{
+			sem_post(&semS3);
+		}	
 	}
 
 
 	pthread_exit((void *)0);
 }
+
+
+/* Service 3 is a best effort thread that send the dumped images over socket*/
 
 void *Service_3(void *threadp)
 {
@@ -422,9 +397,6 @@ void *Service_3(void *threadp)
 	int count = 0;
 	int i = 0;
 	printf("\n Entered Service_3 \n");
-	//gettimeofday(&current_time_val, (struct timezone *)0);
-	//syslog(LOG_CRIT, "Frame_Dump @ sec=%d, msec=%d\n", (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
-	//printf("Frame_Dump @ sec=%d, msec=%d\n", (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
 
 	while(!abortS3)
 	{
@@ -433,12 +405,9 @@ void *Service_3(void *threadp)
 		count++;
 		if(count < FRAME_COUNT)
 		{
-		//printf("\n Entered Service_2 \n");
-		//gettimeofday(&current_time_val, (struct timezone *)0);
+
 		clock_gettime(CLOCK_REALTIME, &start_socket_time);
 		syslog(LOG_CRIT, "Socket_start_time %llu @ sec= %f \n", S3Cnt, ((double)start_socket_time.tv_sec + (double) ((start_socket_time.tv_nsec)/(double)1000000000)));
-		//printf( "Socket_start_time %llu @ sec= %f \n", S3Cnt, ((double)start_socket_time.tv_sec + (double) ((start_socket_time.tv_nsec)/(double)1000000000)));
-		/* Insert Socket program*/
 
 R:			f = fopen(ppm,"rb");
 
@@ -447,23 +416,15 @@ R:			f = fopen(ppm,"rb");
 			{
 
 				fseek(f,0,SEEK_END);
-				file_size = ftell(f);
-				//printf("\n file_size_check: %ld",file_size);		
+				file_size = ftell(f);	
 				fseek(f,0,SEEK_SET);
 				strcpy(packet_info.file_name,ppm);
-				
-				//packet_info.file_size = file_size;
 
 				fread_status = fread(packet_info.buffer,1,BUF_SIZE,f);
-				//printf("\n The file read status is: %d", fread_status);
 				int size = sizeof(packet_info);
-				//printf("\n The size of packet is: %d", size);
 				int send_status = send(client_socket,&packet_info,sizeof(packet_info),0);
 				if(send_status < 0)
-					//printf("ERROR: Sending file");
 					syslog(LOG_CRIT,"ERROR: Sending file");
-				else
-					//printf("\n Image sent successfully");
 
 				fclose(f);
 
@@ -471,12 +432,9 @@ R:			f = fopen(ppm,"rb");
 			}
 			else
 			{
-				
-				//printf("\n File does not exist:  %s", ppm);
 				goto R;
 			}
 		clock_gettime(CLOCK_REALTIME, &end_socket_time);
-		//printf( "Socket_end_time %llu @ sec= %f \n", S3Cnt, ((double)end_socket_time.tv_sec + (double) ((end_socket_time.tv_nsec)/(double)1000000000)));
 
 		}
 
@@ -486,19 +444,14 @@ R:			f = fopen(ppm,"rb");
 	pthread_exit((void *)0);
 }
 
+/* Sequencer is a real time thread that schedules the three tasks using semaphore*/
 void *Sequencer(void *threadp)
 { 
 	//for my while loop
 	long long int loop=1;
 	double average_time;
-	//structure for current time in sec and msec
 	struct timeval current_time_val,previous_time_val, difference_time_val[FRAME_COUNT];
-	
-	//#ifdef HZ
-		//struct timespec delay_time = {0,99910000};	/*for 10 hz*/
-	//#else
-		//struct timespec delay_time = {0,999874500};	/*for 1hz*/
-	//#endif	
+
 	
 	if(hz_enable == 10)
 	{
@@ -532,28 +485,21 @@ void *Sequencer(void *threadp)
 
 
 	do
-    	{
+    {
 		delay_cnt=0; residual=0.0;
-		
-		//gettimeofday(&current_time_val, (struct timezone *)0);
-		//syslog(LOG_CRIT, "Sequencer thread prior to delay @ sec=%d, msec=%d\n", (int)(current_time_val.tv_sec-start_time_val.tv_sec), (int)current_time_val.tv_usec/USEC_PER_MSEC);
+
 		rc=nanosleep(&delay_time, &remaining_time);
 		clock_gettime(CLOCK_REALTIME, &start_seq_time);
-		//printf("\n Sequencer cycle before sem_post %llu @ sec=%f \n", seqCnt, ((double)start_seq_time.tv_sec + (double) ((start_seq_time.tv_nsec)/(double)1000000000)));
-		//printf( "Sequencer cycle before sem_post %llu @ sec=%d, msec=%d\n", seqCnt, (int)(current_time_val.tv_sec), (int)(current_time_val.tv_usec)/USEC_PER_MSEC);
 		seqCnt++;	
 		count++;
 
 		if(delay_cnt > 1) printf("Sequencer looping delay %d\n", delay_cnt);
 		
 		sem_post(&semS1);
-		clock_gettime(CLOCK_REALTIME, &end_seq_time);
-		//printf("\n Sequencer cycle before sem_post %llu @ sec=%f \n", seqCnt, ((double)end_seq_time.tv_sec + (double) ((end_seq_time.tv_nsec)/(double)1000000000)));
-		
+		clock_gettime(CLOCK_REALTIME, &end_seq_time);		
 		if(count >5)
 		{			
 			diff1[i] = ((double)end_seq_time.tv_sec + (double) ((end_seq_time.tv_nsec)/(double)1000000000)) - ((double)start_seq_time.tv_sec + (double) ((start_seq_time.tv_nsec)/(double)1000000000));
-			//printf("\n The difference in Sequencer time is : %f \n", diff1[i]);
 			total_time_sec = total_time_sec + diff1[i];
 			i++;
 
@@ -569,12 +515,10 @@ void *Sequencer(void *threadp)
 
 				}
 		    
-		    		printf("***Sequencer_cycle WCET @ sec= %f\n",diff1[0]);
+		    	printf("***Sequencer_cycle WCET @ sec= %f\n",diff1[0]);
 				printf("***Sequencer_cycle Total_time sec= %f\n", total_time_sec);
 				average_time = ((double)total_time_sec)/(FRAME_COUNT-5);
 				printf("***Sequencer_cycle Average_time %f\n seconds", average_time);
-				//syslog(LOG_CRIT, "***Sequencer cycle WCET @ sec= %d, msec=%d\n",(int)difference_time_val[0].tv_sec,(int)difference_time_val[0].tv_usec/USEC_PER_MSEC);
-				//syslog(LOG_CRIT, "***Sequencer cycle Total_time sec=%d, msec=%d\n", total_time_sec, total_time_msec);
 
 			}
 
@@ -662,10 +606,6 @@ int main(int argc, char *argv[])
 	if (sem_init (&semS1, 0, 0)) { printf ("Failed to initialize S1 semaphore\n"); exit (-1); }
 	if (sem_init (&semS2, 0, 0)) { printf ("Failed to initialize S2 semaphore\n"); exit (-1); }
 	if (sem_init (&semS3, 0, 0)) { printf ("Failed to initialize S3 semaphore\n"); exit (-1); }
-	/*if (sem_init (&semS4, 0, 0)) { printf ("Failed to initialize S4 semaphore\n"); exit (-1); }
-	if (sem_init (&semS5, 0, 0)) { printf ("Failed to initialize S5 semaphore\n"); exit (-1); }
-	if (sem_init (&semS6, 0, 0)) { printf ("Failed to initialize S6 semaphore\n"); exit (-1); }
-	if (sem_init (&semS7, 0, 0)) { printf ("Failed to initialize S7 semaphore\n"); exit (-1); }*/
 
 	mainpid=getpid();
 
@@ -788,7 +728,6 @@ int main(int argc, char *argv[])
 		   	printf("No affinity set for thread %d\n",i);
 		}
 	}
-
 
 	for(i=0;i<NUM_THREADS;i++)
 		pthread_join(threads[i], NULL);
